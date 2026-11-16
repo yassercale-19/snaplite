@@ -83,14 +83,6 @@ class DownloadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(c
         }
     }
 
-    /** Called when the user taps Cancel: kill the running yt-dlp process. */
-    override fun onStopped() {
-        try {
-            YoutubeDL.getInstance().destroyProcessById(taskId)
-        } catch (_: Exception) {
-        }
-        super.onStopped()
-    }
 
     private fun foregroundInfo(title: String, percent: Int): ForegroundInfo {
         val cancelIntent = WorkManager.getInstance(applicationContext).createCancelPendingIntent(id)
