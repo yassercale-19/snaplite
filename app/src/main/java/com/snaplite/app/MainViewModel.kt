@@ -50,9 +50,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     var loading by mutableStateOf(false)
     var message by mutableStateOf<String?>(null)
 
+    /** True when the link could not be analyzed; the user can still try "Download anyway". */
+    var analyzeFailed by mutableStateOf(false)
+
     var audioOnly by mutableStateOf(false)
     var height by mutableIntStateOf(0) // 0 = best available
     var audioFormat by mutableStateOf("mp3")
+
+    /** After one forced engine update per session, don't keep retrying. */
+    private var retriedAfterUpdate = false
 
     val downloads: StateFlow<List<DownloadItem>> = workManager
         .getWorkInfosByTagFlow(Keys.TAG)
@@ -73,6 +79,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
+    private suspend fun fetchInfo(link: String): MediaInfo {
+        val result = withContext(Dispatchers.IO) {
+            YoutubeDL.getInstance().getInfo(
+                YoutubeDLRequest(link).apply { addOption("--no-playlist") }
+            )
+        }
+        return MediaInfo(
+            title = result.title ?: link,
+            thumbnail = result.thumbnail,
+            uploader = result.uploader,
+            durationSec = result.duration.toLong(),
+        )
+    }
+
     /** Look up the title / thumbnail of the pasted link. */
     fun analyze() {
         val link = extractUrl(url)
@@ -85,28 +105,34 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             loading = true
             message = null
             info = null
+            analyzeFailed = false
 
-            val engineError = getApplication<SnapApp>().engineReady.await()
+            val app = getApplication<SnapApp>()
+            if (!app.engineReady.isCompleted) message = "Preparing engine…"
+            val engineError = app.engineReady.await()
+            message = null
             if (engineError != null) {
                 message = "Engine failed to start: ${cleanError(engineError)}"
+                analyzeFailed = true
                 loading = false
                 return@launch
             }
 
             try {
-                val result = withContext(Dispatchers.IO) {
-                    YoutubeDL.getInstance().getInfo(
-                        YoutubeDLRequest(link).apply { addOption("--no-playlist") }
-                    )
+                info = try {
+                    fetchInfo(link)
+                } catch (e: Exception) {
+                    // Sites change often: update yt-dlp once and try again automatically.
+                    if (retriedAfterUpdate) throw e
+                    retriedAfterUpdate = true
+                    message = "Updating engine and retrying…"
+                    app.updateEngine(force = true)
+                    message = null
+                    fetchInfo(link)
                 }
-                info = MediaInfo(
-                    title = result.title ?: link,
-                    thumbnail = result.thumbnail,
-                    uploader = result.uploader,
-                    durationSec = result.duration.toLong(),
-                )
             } catch (e: Exception) {
                 message = cleanError(e)
+                analyzeFailed = true
             }
             loading = false
         }
@@ -142,17 +168,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         workManager.pruneWork()
     }
 
-    /** Sites change often – updating yt-dlp fixes most "can't download" errors. */
+    /** Manual update button (updates also run automatically every 12 hours). */
     fun updateEngine() {
         viewModelScope.launch {
             message = "Updating engine…"
-            message = try {
-                val status = withContext(Dispatchers.IO) {
-                    YoutubeDL.getInstance().updateYoutubeDL(getApplication<Application>())
-                }
-                "Engine update: ${status ?: "done"}"
-            } catch (e: Exception) {
-                cleanError(e)
+            val status = getApplication<SnapApp>().updateEngine(force = true)
+            message = if (status == null) {
+                "Update failed. Check your internet connection."
+            } else {
+                "Engine update: $status"
             }
         }
     }

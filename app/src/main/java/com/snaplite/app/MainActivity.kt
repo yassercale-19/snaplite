@@ -160,8 +160,8 @@ private fun InputSection(vm: MainViewModel) {
             Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
-        vm.info?.let { info ->
-            InfoCard(info)
+        if (vm.info != null || vm.analyzeFailed) {
+            vm.info?.let { InfoCard(it) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = !vm.audioOnly, onClick = { vm.audioOnly = false }, label = { Text("Video") })
                 FilterChip(selected = vm.audioOnly, onClick = { vm.audioOnly = true }, label = { Text("Audio") })
@@ -191,7 +191,9 @@ private fun InputSection(vm: MainViewModel) {
                         }
                 }
             }
-            Button(onClick = vm::download, modifier = Modifier.fillMaxWidth()) { Text("Download") }
+            Button(onClick = vm::download, modifier = Modifier.fillMaxWidth()) {
+                Text(if (vm.info != null) "Download" else "Download anyway")
+            }
         }
     }
 }
