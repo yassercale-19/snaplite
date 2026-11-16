@@ -62,6 +62,13 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation("io.coil-kt:coil-compose:2.7.0")
 
+    // Video tools (trim / extract audio) – runs on the phone, no extra binaries.
+    val media3 = "1.5.1"
+    implementation("androidx.media3:media3-common:$media3")
+    implementation("androidx.media3:media3-exoplayer:$media3")
+    implementation("androidx.media3:media3-ui:$media3")
+    implementation("androidx.media3:media3-transformer:$media3")
+
     // The download engine: yt-dlp + ffmpeg running on the phone itself.
     implementation("io.github.junkfood02.youtubedl-android:library:$ytdlVersion")
     implementation("io.github.junkfood02.youtubedl-android:ffmpeg:$ytdlVersion")
