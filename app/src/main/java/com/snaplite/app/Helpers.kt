@@ -1,6 +1,7 @@
 package com.snaplite.app
 
 import android.content.ContentValues
+import android.graphics.Bitmap
 import android.content.Context
 import android.provider.MediaStore
 import android.webkit.MimeTypeMap
@@ -25,6 +26,27 @@ fun extractUrl(text: String?): String? = text?.let { URL_REGEX.find(it)?.value }
 
 fun cleanError(e: Throwable): String =
     e.message?.lines()?.lastOrNull { it.isNotBlank() }?.take(220) ?: "Unknown error"
+
+/** Saves a picture (e.g. a video frame) into Pictures/SnapLite. Returns the folder. */
+fun saveBitmap(ctx: Context, bmp: Bitmap): String {
+    val folder = "Pictures/SnapLite"
+    val values = ContentValues().apply {
+        put(MediaStore.MediaColumns.DISPLAY_NAME, "SnapLite_${System.currentTimeMillis()}.jpg")
+        put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+        put(MediaStore.MediaColumns.RELATIVE_PATH, folder)
+        put(MediaStore.MediaColumns.IS_PENDING, 1)
+    }
+    val resolver = ctx.contentResolver
+    val uri = resolver.insert(MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values)
+        ?: error("Could not create the picture in storage")
+    resolver.openOutputStream(uri)?.use { bmp.compress(Bitmap.CompressFormat.JPEG, 95, it) }
+        ?: error("Could not open the output file")
+
+    values.clear()
+    values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+    resolver.update(uri, values, null, null)
+    return folder
+}
 
 /**
  * Copies a finished download into the public Music / Movies folder (visible in the

@@ -1,3 +1,15 @@
 <resources>
-    <style name="Theme.SnapLite" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.SnapLite" parent="android:Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <!-- Small pop-up sheet shown when a link is shared to SnapLite -->
+    <style name="Theme.SnapLite.Share" parent="Theme.SnapLite">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">true</item>
+    </style>
 </resources>

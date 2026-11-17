@@ -3,6 +3,8 @@ package com.snaplite.app
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,14 +12,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RangeSlider
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -41,53 +46,118 @@ fun ToolsScreen(vm: ToolsViewModel, modifier: Modifier = Modifier) {
 
     Column(
         modifier = modifier
-            .padding(horizontal = 16.dp)
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Video tools", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 16.dp))
-
-        Button(onClick = { picker.launch("video/*") }, enabled = !vm.working) {
-            Text(if (vm.uri == null) "Choose a video from your phone" else "Choose another video")
-        }
+        Text("Tools", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 16.dp))
 
         val uri = vm.uri
-        if (uri != null) {
+        if (uri == null) {
+            Text(
+                "Edit videos right on your phone. Pick a tool, then choose a video.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Op.entries.forEach { op ->
+                ToolCard(op) {
+                    vm.op = op
+                    picker.launch("video/*")
+                }
+            }
+        } else {
             Preview(uri, vm.startMs)
 
-            Text(
-                "Keep from ${formatMs(vm.startMs)} to ${formatMs(vm.endMs)}  (${formatMs(vm.endMs - vm.startMs)})",
-                style = MaterialTheme.typography.titleSmall,
-            )
-            RangeSlider(
-                value = vm.startMs.toFloat()..vm.endMs.toFloat(),
-                onValueChange = { vm.setRange(it.start.toLong(), it.endInclusive.toLong()) },
-                valueRange = 0f..vm.durationMs.toFloat(),
-                enabled = !vm.working,
-            )
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Op.entries.forEach { op ->
+                    FilterChip(
+                        selected = vm.op == op,
+                        onClick = { vm.op = op },
+                        enabled = !vm.working,
+                        label = { Text(op.label) },
+                    )
+                }
+            }
 
-            if (vm.working) {
+            Text(vm.op.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            when (vm.op) {
+                Op.COMPRESS -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(720 to "720p", 480 to "480p", 360 to "360p").forEach { (h, label) ->
+                        FilterChip(
+                            selected = vm.compressHeight == h,
+                            onClick = { vm.compressHeight = h },
+                            enabled = !vm.working,
+                            label = { Text(label) },
+                        )
+                    }
+                }
+                Op.ROTATE -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(90 to "90°", 180 to "180°", 270 to "270°").forEach { (deg, label) ->
+                        FilterChip(
+                            selected = vm.rotation == deg,
+                            onClick = { vm.rotation = deg },
+                            enabled = !vm.working,
+                            label = { Text(label) },
+                        )
+                    }
+                }
+                else -> Unit
+            }
+
+            if (vm.op == Op.FRAME) {
+                Text("Frame at ${formatMs(vm.startMs)}", style = MaterialTheme.typography.titleSmall)
+                Slider(
+                    value = vm.startMs.toFloat(),
+                    onValueChange = { vm.setFrameTime(it.toLong()) },
+                    valueRange = 0f..vm.durationMs.toFloat(),
+                    enabled = !vm.working,
+                )
+            } else {
+                Text(
+                    "Use from ${formatMs(vm.startMs)} to ${formatMs(vm.endMs)}  (${formatMs(vm.endMs - vm.startMs)})",
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                RangeSlider(
+                    value = vm.startMs.toFloat()..vm.endMs.toFloat(),
+                    onValueChange = { vm.setRange(it.start.toLong(), it.endInclusive.toLong()) },
+                    valueRange = 0f..vm.durationMs.toFloat(),
+                    enabled = !vm.working,
+                )
+            }
+
+            if (vm.working && vm.op != Op.FRAME) {
                 LinearProgressIndicator(progress = { vm.progress }, modifier = Modifier.fillMaxWidth())
                 OutlinedButton(onClick = vm::cancel) { Text("Cancel") }
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { vm.export(audioOnly = false) }) { Text("Cut video") }
-                    OutlinedButton(onClick = { vm.export(audioOnly = true) }) { Text("Extract audio") }
+                    Button(onClick = vm::run, enabled = !vm.working) { Text(vm.op.action) }
+                    OutlinedButton(onClick = { picker.launch("video/*") }, enabled = !vm.working) { Text("Other video") }
                 }
             }
         }
 
         vm.message?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    }
+}
 
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Coming next", style = MaterialTheme.typography.titleSmall)
-                Text(
-                    "Smart tools: remove silent parts, auto captions, and find the best moments.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+@Composable
+private fun ToolCard(op: Op, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(op.action, style = MaterialTheme.typography.titleSmall)
+            Text(
+                op.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
